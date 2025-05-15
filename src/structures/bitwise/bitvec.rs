@@ -1,9 +1,11 @@
 //! Bit vector implementation.
 //!
-//! File: biocomplexity/src/structures/bitwise/bitvec.rs
+//! File: rusty_code/src/structures/bitwise/bitvec.rs
 
 use std::fmt::{Debug, Display};
 use std::ops::{BitAnd, BitOr, BitXor, Index, Not};
+
+use num_traits::{PrimInt, Unsigned};
 
 use crate::errors::{Error, Result};
 use crate::traits::{BitwiseStructure, DataStructure};
@@ -13,25 +15,25 @@ use crate::traits::{BitwiseStructure, DataStructure};
 /// Similar to a bitmap, but offers dynamic resizing and
 /// provides methods to handle it as a growable array of bits.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BitVec {
+pub struct BitVec<T: PrimInt + Unsigned> {
     // TODO: Implement BitVec fields
-    bits: Vec<u64>,
+    bits: Vec<T>,
     size: usize, // Size in bits
 }
 
-impl BitVec {
+impl<T: PrimInt + Unsigned> BitVec<T> {
     /// Creates a new, empty BitVec.
     ///
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let bvec = BitVec::new();
+    /// let bvec = BitVec::<u64>::new();
     /// ```
     pub fn new() -> Self {
-        BitVec {
-            bits: Vec::new(),
+        Self {
+            bits: Vec::<T>::new(),
             size: 0,
         }
     }
@@ -41,14 +43,14 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let bvec = BitVec::with_capacity(1024);
+    /// let bvec: BitVec<u64>  = BitVec::with_capacity(1024);
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
-        let num_blocks = (capacity + 63) / 64;
+        let num_blocks: usize = (capacity + 63) / 64;
         BitVec {
-            bits: vec![0; num_blocks],
+            bits: vec![T::zero(); num_blocks],
             size: capacity,
         }
     }
@@ -58,10 +60,10 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
     /// let indices = vec![0, 2, 4, 6, 8];
-    /// let bvec = BitVec::from_indices(&indices);
+    /// let bvec: BitVec<u64>  = BitVec::from_indices(&indices);
     /// ```
     pub fn from_indices(indices: &[usize]) -> Self {
         if indices.is_empty() {
@@ -69,8 +71,8 @@ impl BitVec {
         }
 
         // Find the maximum index to determine size
-        let max_index = *indices.iter().max().unwrap();
-        let mut bitvec = Self::with_capacity(max_index + 1);
+        let max_index: usize = *indices.iter().max().unwrap();
+        let mut bitvec: BitVec<T> = Self::with_capacity(max_index + 1);
 
         for &idx in indices {
             bitvec.set(idx).unwrap();
@@ -89,13 +91,13 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec = BitVec::new();
+    /// let mut bvec: BitVec<u64>  = BitVec::new();
     /// bvec.resize(1024);
     /// ```
     pub fn resize(&mut self, new_size: usize) {
-        let new_num_blocks = (new_size + 63) / 64;
+        let new_num_blocks: usize = (new_size + 63) / 64;
 
         if new_num_blocks <= self.bits.len() {
             // Shrinking
@@ -103,14 +105,14 @@ impl BitVec {
 
             // Clear bits that are beyond the new size in the last block
             if new_size % 64 != 0 && !self.bits.is_empty() {
-                let last_idx = self.bits.len() - 1;
-                let valid_bits = new_size % 64;
-                let mask = (1u64 << valid_bits) - 1;
-                self.bits[last_idx] &= mask;
+                let last_idx: usize = self.bits.len() - 1;
+                let valid_bits: usize = new_size % 64;
+                let mask: u64 = (1u64 << valid_bits) - 1;
+                self.bits[last_idx] = self.bits[last_idx] & T::from(mask).unwrap();
             }
         } else {
             // Growing
-            self.bits.resize(new_num_blocks, 0);
+            self.bits.resize(new_num_blocks, T::zero());
         }
 
         self.size = new_size;
@@ -121,15 +123,15 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec = BitVec::new();
+    /// let mut bvec: BitVec<u64>  = BitVec::new();
     /// bvec.push(true);
     /// bvec.push(false);
     /// ```
     pub fn push(&mut self, value: bool) {
         // TODO: Implement push
-        let idx = self.size;
+        let idx: usize = self.size;
         self.resize(idx + 1);
         if value {
             self.set(idx).unwrap();
@@ -141,9 +143,9 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec = BitVec::new();
+    /// let mut bvec: BitVec<u64>  = BitVec::new();
     /// bvec.push(true);
     /// assert_eq!(bvec.pop(), Some(true));
     /// assert_eq!(bvec.pop(), None);
@@ -154,8 +156,8 @@ impl BitVec {
             return None;
         }
 
-        let idx = self.size - 1;
-        let value = self.get(idx);
+        let idx: usize = self.size - 1;
+        let value: bool = self.get(idx);
         self.resize(idx);
 
         Some(value)
@@ -166,9 +168,9 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec = BitVec::with_capacity(10);
+    /// let mut bvec: BitVec<u64>  = BitVec::with_capacity(10);
     /// bvec.set(5);
     /// assert!(bvec.get(5));
     /// ```
@@ -181,9 +183,9 @@ impl BitVec {
             )));
         }
 
-        let block_idx = index / 64;
-        let bit_idx = index % 64;
-        self.bits[block_idx] |= 1u64 << bit_idx;
+        let block_idx: usize = index / 64;
+        let bit_idx: usize = index % 64;
+        self.bits[block_idx] = self.bits[block_idx] | T::from(1u64 << bit_idx).unwrap();
 
         Ok(())
     }
@@ -193,9 +195,9 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec = BitVec::with_capacity(10);
+    /// let mut bvec: BitVec<u64>  = BitVec::with_capacity(10);
     /// bvec.set(5);
     /// bvec.clear_bit(5);
     /// assert!(!bvec.get(5));
@@ -209,9 +211,9 @@ impl BitVec {
             )));
         }
 
-        let block_idx = index / 64;
-        let bit_idx = index % 64;
-        self.bits[block_idx] &= !(1u64 << bit_idx);
+        let block_idx: usize = index / 64;
+        let bit_idx: usize = index % 64;
+        self.bits[block_idx] = self.bits[block_idx] & T::from(!(1u64 << bit_idx)).unwrap();
 
         Ok(())
     }
@@ -221,9 +223,9 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec = BitVec::with_capacity(10);
+    /// let mut bvec: BitVec<u64>  = BitVec::with_capacity(10);
     /// bvec.toggle(5);
     /// assert!(bvec.get(5));
     /// bvec.toggle(5);
@@ -238,9 +240,9 @@ impl BitVec {
             )));
         }
 
-        let block_idx = index / 64;
-        let bit_idx = index % 64;
-        self.bits[block_idx] ^= 1u64 << bit_idx;
+        let block_idx: usize = index / 64;
+        let bit_idx: usize = index % 64;
+        self.bits[block_idx] = self.bits[block_idx] ^ T::from(1u64 << bit_idx).unwrap();
 
         Ok(())
     }
@@ -250,9 +252,9 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec = BitVec::with_capacity(10);
+    /// let mut bvec: BitVec<u64>  = BitVec::with_capacity(10);
     /// bvec.set(5);
     /// assert!(bvec.get(5));
     /// assert!(!bvec.get(4));
@@ -263,9 +265,9 @@ impl BitVec {
             return false;
         }
 
-        let block_idx = index / 64;
-        let bit_idx = index % 64;
-        (self.bits[block_idx] & (1u64 << bit_idx)) != 0
+        let block_idx: usize = index / 64;
+        let bit_idx: usize = index % 64;
+        (self.bits[block_idx] & T::from(1u64 << bit_idx).unwrap()) != T::zero()
     }
 
     /// Returns the number of set bits (1s) in the BitVec.
@@ -273,9 +275,9 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec = BitVec::with_capacity(10);
+    /// let mut bvec: BitVec<u64>  = BitVec::with_capacity(10);
     /// bvec.set(1);
     /// bvec.set(3);
     /// bvec.set(5);
@@ -285,7 +287,7 @@ impl BitVec {
         // TODO: Implement count_ones
         self.bits
             .iter()
-            .map(|block| block.count_ones() as usize)
+            .map(|block: &T| block.count_ones() as usize)
             .sum()
     }
 
@@ -299,14 +301,14 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec1 = BitVec::with_capacity(10);
+    /// let mut bvec1: BitVec<u64>  = BitVec::with_capacity(10);
     /// bvec1.set(1);
     /// bvec1.set(3);
     /// bvec1.set(5);
     ///
-    /// let mut bvec2 = BitVec::with_capacity(10);
+    /// let mut bvec2: BitVec<u64>  = BitVec::with_capacity(10);
     /// bvec2.set(1);
     /// bvec2.set(2);
     /// bvec2.set(5);
@@ -319,14 +321,14 @@ impl BitVec {
     /// ```
     pub fn and(&self, other: &Self) -> Self {
         // TODO: Implement and
-        let size = self.size.max(other.size);
-        let mut result = Self::with_capacity(size);
+        let size: usize = self.size.max(other.size);
+        let mut result: BitVec<T> = Self::with_capacity(size);
 
         for (i, block) in self.bits.iter().enumerate() {
             if i < other.bits.len() {
                 result.bits[i] = *block & other.bits[i];
             } else {
-                result.bits[i] = 0;
+                result.bits[i] = T::zero();
             }
         }
 
@@ -336,17 +338,21 @@ impl BitVec {
     /// Performs a bitwise OR operation with another BitVec.
     pub fn or(&self, other: &Self) -> Self {
         // TODO: Implement or
-        let size = self.size.max(other.size);
-        let mut result = Self::with_capacity(size);
+        let size: usize = self.size.max(other.size);
+        let mut result: BitVec<T> = Self::with_capacity(size);
 
         for i in 0..result.bits.len() {
-            let self_bit = if i < self.bits.len() { self.bits[i] } else { 0 };
-            let other_bit = if i < other.bits.len() {
-                other.bits[i]
+            let self_bit: u64 = if i < self.bits.len() {
+                self.bits[i].to_u64().unwrap()
             } else {
                 0
             };
-            result.bits[i] = self_bit | other_bit;
+            let other_bit: u64 = if i < other.bits.len() {
+                other.bits[i].to_u64().unwrap()
+            } else {
+                0
+            };
+            result.bits[i] = T::from(self_bit | other_bit).unwrap();
         }
 
         result
@@ -355,17 +361,21 @@ impl BitVec {
     /// Performs a bitwise XOR operation with another BitVec.
     pub fn xor(&self, other: &Self) -> Self {
         // TODO: Implement xor
-        let size = self.size.max(other.size);
-        let mut result = Self::with_capacity(size);
+        let size: usize = self.size.max(other.size);
+        let mut result: BitVec<T> = Self::with_capacity(size);
 
         for i in 0..result.bits.len() {
-            let self_bit = if i < self.bits.len() { self.bits[i] } else { 0 };
-            let other_bit = if i < other.bits.len() {
-                other.bits[i]
+            let self_bit: u64 = if i < self.bits.len() {
+                self.bits[i].to_u64().unwrap()
             } else {
                 0
             };
-            result.bits[i] = self_bit ^ other_bit;
+            let other_bit: u64 = if i < other.bits.len() {
+                other.bits[i].to_u64().unwrap()
+            } else {
+                0
+            };
+            result.bits[i] = T::from(self_bit ^ other_bit).unwrap();
         }
 
         result
@@ -374,7 +384,7 @@ impl BitVec {
     /// Performs a bitwise NOT operation.
     pub fn not(&self) -> Self {
         // TODO: Implement not
-        let mut result = self.clone();
+        let mut result: BitVec<T> = self.clone();
 
         for i in 0..result.bits.len() {
             result.bits[i] = !self.bits[i];
@@ -382,10 +392,10 @@ impl BitVec {
 
         // Clear bits that are beyond the BitVec size
         if self.size % 64 != 0 {
-            let last_idx = result.bits.len() - 1;
-            let valid_bits = self.size % 64;
-            let mask = (1u64 << valid_bits) - 1;
-            result.bits[last_idx] &= mask;
+            let last_idx: usize = result.bits.len() - 1;
+            let valid_bits: usize = self.size % 64;
+            let mask: u64 = (1u64 << valid_bits) - 1;
+            result.bits[last_idx] = result.bits[last_idx] & T::from(mask).unwrap();
         }
 
         result
@@ -396,9 +406,9 @@ impl BitVec {
     /// # Examples
     ///
     /// ```
-    /// use biocomplexity::structures::bitwise::BitVec;
+    /// use rusty_code::structures::bitwise::BitVec;
     ///
-    /// let mut bvec = BitVec::with_capacity(10);
+    /// let mut bvec: BitVec<u64>  = BitVec::with_capacity(10);
     /// bvec.set(1);
     /// bvec.set(3);
     /// bvec.set(5);
@@ -408,7 +418,7 @@ impl BitVec {
     /// ```
     pub fn to_indices(&self) -> Vec<usize> {
         // TODO: Implement to_indices
-        let mut indices = Vec::with_capacity(self.count_ones());
+        let mut indices: Vec<usize> = Vec::with_capacity(self.count_ones());
 
         for i in 0..self.size {
             if self.get(i) {
@@ -420,7 +430,7 @@ impl BitVec {
     }
 
     /// Returns an iterator over the set bits.
-    pub fn iter_ones(&self) -> BitVecOnesIterator {
+    pub fn iter_ones(&self) -> BitVecOnesIterator<T> {
         BitVecOnesIterator {
             bitvec: self,
             index: 0,
@@ -428,28 +438,34 @@ impl BitVec {
     }
 
     /// Returns a slice of the underlying storage.
-    pub fn as_slice(&self) -> &[u64] {
-        &self.bits
+    pub fn as_slice(&self) -> Vec<u64> {
+        self.bits
+            .iter()
+            .map(|&block| block.to_u64().unwrap())
+            .collect()
     }
 
     /// Returns a mutable slice of the underlying storage.
-    pub fn as_slice_mut(&mut self) -> &mut [u64] {
-        &mut self.bits
+    pub fn as_slice_mut(&mut self) -> Vec<u64> {
+        self.bits
+            .iter_mut()
+            .map(|block| block.to_u64().unwrap())
+            .collect()
     }
 }
 
 /// An iterator over the set bits in a BitVec.
-pub struct BitVecOnesIterator<'a> {
-    bitvec: &'a BitVec,
+pub struct BitVecOnesIterator<'a, T: PrimInt + Unsigned> {
+    bitvec: &'a BitVec<T>,
     index: usize,
 }
 
-impl<'a> Iterator for BitVecOnesIterator<'a> {
+impl<'a, T: PrimInt + Unsigned> Iterator for BitVecOnesIterator<'a, T> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.index < self.bitvec.bit_size() {
-            let idx = self.index;
+            let idx: usize = self.index;
             self.index += 1;
 
             if self.bitvec.get(idx) {
@@ -461,7 +477,7 @@ impl<'a> Iterator for BitVecOnesIterator<'a> {
     }
 }
 
-impl DataStructure for BitVec {
+impl<T: PrimInt + Unsigned> DataStructure for BitVec<T> {
     fn name(&self) -> &str {
         "BitVec"
     }
@@ -472,12 +488,12 @@ impl DataStructure for BitVec {
 
     fn clear(&mut self) {
         for block in &mut self.bits {
-            *block = 0;
+            *block = T::zero();
         }
     }
 }
 
-impl BitwiseStructure for BitVec {
+impl<T: PrimInt + Unsigned> BitwiseStructure for BitVec<T> {
     fn bit_size(&self) -> usize {
         self.bit_size()
     }
@@ -503,7 +519,7 @@ impl BitwiseStructure for BitVec {
     }
 }
 
-impl Index<usize> for BitVec {
+impl<T: PrimInt + Unsigned> Index<usize> for BitVec<T> {
     type Output = bool;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -511,39 +527,39 @@ impl Index<usize> for BitVec {
     }
 }
 
-impl BitAnd for &BitVec {
-    type Output = BitVec;
+impl<T: PrimInt + Unsigned> BitAnd for &BitVec<T> {
+    type Output = BitVec<T>;
 
     fn bitand(self, rhs: Self) -> Self::Output {
         self.and(rhs)
     }
 }
 
-impl BitOr for &BitVec {
-    type Output = BitVec;
+impl<T: PrimInt + Unsigned> BitOr for &BitVec<T> {
+    type Output = BitVec<T>;
 
     fn bitor(self, rhs: Self) -> Self::Output {
         self.or(rhs)
     }
 }
 
-impl BitXor for &BitVec {
-    type Output = BitVec;
+impl<T: PrimInt + Unsigned> BitXor for &BitVec<T> {
+    type Output = BitVec<T>;
 
     fn bitxor(self, rhs: Self) -> Self::Output {
         self.xor(rhs)
     }
 }
 
-impl Not for &BitVec {
-    type Output = BitVec;
+impl<T: PrimInt + Unsigned> Not for &BitVec<T> {
+    type Output = BitVec<T>;
 
     fn not(self) -> Self::Output {
         self.not()
     }
 }
 
-impl Display for BitVec {
+impl<T: PrimInt + Unsigned> Display for BitVec<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for i in 0..self.size {
             write!(f, "{}", if self.get(i) { '1' } else { '0' })?;
@@ -552,9 +568,9 @@ impl Display for BitVec {
     }
 }
 
-impl FromIterator<bool> for BitVec {
+impl<T: PrimInt + Unsigned> FromIterator<bool> for BitVec<T> {
     fn from_iter<I: IntoIterator<Item = bool>>(iter: I) -> Self {
-        let mut bitvec = BitVec::new();
+        let mut bitvec: BitVec<T> = BitVec::new();
         for bit in iter {
             bitvec.push(bit);
         }
@@ -568,21 +584,36 @@ mod tests {
 
     #[test]
     fn test_new_bitvec() {
-        let bvec = BitVec::new();
+        println!("{:?}", std::mem::size_of::<usize>());
+        let bvec: BitVec<u64> = BitVec::new();
+        println!("BitVector: {:#?}", bvec);
+        println!(
+            "Size of BitVector: {:?} bytes",
+            std::mem::size_of_val(&bvec)
+        );
+        println!(
+            "Size of BitVector container: {:?} bytes",
+            std::mem::size_of_val(&bvec.bits)
+        );
+        println!(
+            "Size of BitVector 'size' field: {:?} bytes",
+            std::mem::size_of_val(&bvec.size)
+        );
         assert_eq!(bvec.bit_size(), 0);
         assert_eq!(bvec.count_ones(), 0);
     }
 
     #[test]
     fn test_with_capacity() {
-        let bvec = BitVec::with_capacity(128);
+        let bvec: BitVec<u64> = BitVec::with_capacity(128);
+
         assert_eq!(bvec.bit_size(), 128);
         assert_eq!(bvec.count_ones(), 0);
     }
 
     #[test]
     fn test_push_pop() {
-        let mut bvec = BitVec::new();
+        let mut bvec: BitVec<u64> = BitVec::new();
         bvec.push(true);
         bvec.push(false);
         bvec.push(true);
@@ -598,8 +629,8 @@ mod tests {
 
     #[test]
     fn test_from_indices() {
-        let indices = vec![1, 3, 5, 7, 9];
-        let bvec = BitVec::from_indices(&indices);
+        let indices: Vec<usize> = vec![1, 3, 5, 7, 9];
+        let bvec: BitVec<u64> = BitVec::from_indices(&indices);
         assert_eq!(bvec.bit_size(), 10);
         assert!(bvec.get(1));
         assert!(bvec.get(3));
@@ -612,29 +643,29 @@ mod tests {
 
     #[test]
     fn test_bitwise_ops() {
-        let mut bvec1 = BitVec::with_capacity(10);
+        let mut bvec1: BitVec<u64> = BitVec::with_capacity(10);
         bvec1.set(1).unwrap();
         bvec1.set(3).unwrap();
         bvec1.set(5).unwrap();
 
-        let mut bvec2 = BitVec::with_capacity(10);
+        let mut bvec2: BitVec<u64> = BitVec::with_capacity(10);
         bvec2.set(1).unwrap();
         bvec2.set(2).unwrap();
         bvec2.set(5).unwrap();
 
-        let and_result = bvec1.and(&bvec2);
+        let and_result: BitVec<u64> = bvec1.and(&bvec2);
         assert!(and_result.get(1));
         assert!(!and_result.get(2));
         assert!(!and_result.get(3));
         assert!(and_result.get(5));
 
-        let or_result = bvec1.or(&bvec2);
+        let or_result: BitVec<u64> = bvec1.or(&bvec2);
         assert!(or_result.get(1));
         assert!(or_result.get(2));
         assert!(or_result.get(3));
         assert!(or_result.get(5));
 
-        let xor_result = bvec1.xor(&bvec2);
+        let xor_result: BitVec<u64> = bvec1.xor(&bvec2);
         assert!(!xor_result.get(1));
         assert!(xor_result.get(2));
         assert!(xor_result.get(3));
@@ -643,12 +674,12 @@ mod tests {
 
     #[test]
     fn test_to_indices() {
-        let mut bvec = BitVec::with_capacity(10);
+        let mut bvec: BitVec<u64> = BitVec::with_capacity(10);
         bvec.set(1).unwrap();
         bvec.set(3).unwrap();
         bvec.set(5).unwrap();
 
-        let indices = bvec.to_indices();
+        let indices: Vec<usize> = bvec.to_indices();
         assert_eq!(indices, vec![1, 3, 5]);
     }
 
